@@ -1,0 +1,13 @@
+INTEGRANTES:
+- Gabriel Barbosa Furin - RM: 572941
+- Lucas Kiodi Moraca - RM: 571004
+- Renan Fracalossi Mano da Silva - RM: 569610
+
+LINK DO PROJETO (TINKERCAD):
+https://www.tinkercad.com/things/7ZBku7a92Tj-global-solution-coa?sharecode=Ag-auWkIeHudWy2uvOhL03sFWdusYM7DWpYb_4HR0Iw
+
+LINK DO VIDEO (YOUTUBE - NAO LISTADO):
+https://youtu.be/1qs2sT09RGM
+
+LINK DO GITHUB (REPOSITORIO):
+https://github.com/gabrielbfurin/COA-Global_Solution-2026
