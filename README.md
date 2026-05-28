@@ -14,9 +14,9 @@ Sistema IoT simulado no **Tinkercad** para **telemetria** e **monitoramento em t
 
 Este projeto implementa um protótipo de **sistema embarcado** voltado ao cenário de uma missão espacial simulada. O objetivo é acompanhar continuamente variáveis essenciais de operação e segurança:
 
-- 🌡️ **Temperatura** (sensor **TMP36**)
-- 💡 **Luminosidade** (LDR + divisor de tensão)
-- 📳 **Vibração** (**simulada** por potenciômetro)
+-  **Temperatura** (sensor **TMP36**)
+-  **Luminosidade** (LDR + divisor de tensão)
+-  **Vibração** (**simulada** por potenciômetro)
 
 Os dados são exibidos no **LCD 16x2** em duas telas alternadas, e um **LED de alerta** é acionado sempre que qualquer variável ultrapassa o limite definido.
 
@@ -148,9 +148,9 @@ LCD exibindo **ALRT** quando pelo menos uma variável ultrapassa o limite config
 1. Acesse o link da simulação (seção **Demonstração**).
 2. Clique em **Iniciar simulação**.
 3. Teste os cenários:
-   - 🌡️ Aumente/diminua a temperatura do **TMP36**.
-   - 💡 Ajuste a luz do **LDR** para simular claro/escuro.
-   - 📳 Gire o potenciômetro de **vibração** para simular níveis maiores.
+   -  Aumente/diminua a temperatura do **TMP36**.
+   -  Ajuste a luz do **LDR** para simular claro/escuro.
+   -  Gire o potenciômetro de **vibração** para simular níveis maiores.
 4. Observe:
    - Atualização da **telemetria** no LCD.
    - Status **OK/ALRT** por sensor e status geral.
@@ -194,7 +194,7 @@ COA-Global_Solution-2026/
 
 ## Informações Acadêmicas
 
-- **Instituição:** FIAP
+- **Turma:** 1CCPX
 - **Projeto:** Global Solution 2026 — 1º semestre
 - **Disciplina:** COA
 - **Tema:** Sistema IoT para Monitoramento de Cápsula Espacial
