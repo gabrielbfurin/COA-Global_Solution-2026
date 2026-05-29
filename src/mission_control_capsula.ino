@@ -92,48 +92,44 @@ void updateFilter(int newLuz, int newVib) {
 int getLuzFiltrada() { return (int)(luzSum / FILTER_WINDOW); }
 int getVibFiltrada() { return (int)(vibSum / FILTER_WINDOW); }
 
+void printPadded(const char* s, int width) {
+  int n = 0;
+  while (s[n] != '\0') n++;
+  lcd.print(s);
+  for (int i = n; i < width; i++) lcd.print(' ');
+}
+
 void renderLcd() {
-  // Evita flicker: não usar lcd.clear() no loop; reescrever as duas linhas com padding.
+  // Para não sobrar caractere da tela anterior: sempre imprimir exatamente 16 caracteres por linha.
+  char line0[17];
+  char line1[17];
+
   if (screenIndex == 0) {
-    // Linha 0: T + L
-    lcd.setCursor(0, 0);
-    lcd.print("T:");
-    lcd.print(tempC, 1);
-    lcd.print("C");
-    lcd.print("   ");
+    // Linha 0: "T:24.8C   L:54" (fixo em 16)
+    // Linha 1: "V:0      G:OK" (fixo em 16)
+    // Observação: usamos widths fixas pra garantir limpeza completa.
 
-    lcd.setCursor(10, 0);
-    lcd.print("L:");
-    lcd.print(luzFiltrada);
-    lcd.print("   ");
+    // line0: cols 0..15
+    // T: + temp (5 chars aprox) + C + spaces + L: + luz(4)
+    snprintf(line0, sizeof(line0), "T:%4.1fC  L:%-4d", tempC, luzFiltrada);
+    snprintf(line1, sizeof(line1), "V:%-4d     G:%-4s", vibFiltrada, statusAbrev(alertaGeral));
 
-    // Linha 1: V + G
-    lcd.setCursor(0, 1);
-    lcd.print("V:");
-    lcd.print(vibFiltrada);
-    lcd.print("   ");
-
-    lcd.setCursor(10, 1);
-    lcd.print("G:");
-    lcd.print(statusAbrev(alertaGeral));
-    lcd.print("  ");
   } else {
-    // Linha 0: status T e L
-    lcd.setCursor(0, 0);
-    lcd.print("T:");
-    lcd.print(statusAbrev(alertaTemp));
-    lcd.print("  L:");
-    lcd.print(statusAbrev(alertaLuz));
-    lcd.print("   ");
-
-    // Linha 1: status V e G
-    lcd.setCursor(0, 1);
-    lcd.print("V:");
-    lcd.print(statusAbrev(alertaVib));
-    lcd.print("  G:");
-    lcd.print(statusAbrev(alertaGeral));
-    lcd.print("   ");
+    // Linha 0: "T:OK  L:ALRT" + padding
+    // Linha 1: "V:OK  G:OK" + padding
+    snprintf(line0, sizeof(line0), "T:%-4s L:%-4s", statusAbrev(alertaTemp), statusAbrev(alertaLuz));
+    snprintf(line1, sizeof(line1), "V:%-4s G:%-4s", statusAbrev(alertaVib), statusAbrev(alertaGeral));
   }
+
+  // Garante 16 chars: se snprintf gerar menor, completa; se maior, corta (mas o formato foi pensado p/ caber)
+  line0[16] = '\0';
+  line1[16] = '\0';
+
+  lcd.setCursor(0, 0);
+  printPadded(line0, 16);
+
+  lcd.setCursor(0, 1);
+  printPadded(line1, 16);
 }
 
 void setup() {
@@ -217,6 +213,9 @@ void loop() {
   if (now - lastScreenChange >= SCREEN_INTERVAL_MS) {
     screenIndex = (screenIndex + 1) % 2;
     lastScreenChange = now;
+
+    // Ao trocar de tela, força redesenho imediato para evitar “sobras”
+    lastLcdRefresh = 0;
   }
 
   // 3) Atualização do LCD controlada (evita flicker)
