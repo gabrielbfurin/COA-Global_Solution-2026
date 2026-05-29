@@ -109,9 +109,9 @@ void renderLcd() {
     // Linha 0: T:24.8C L:0054
     // Linha 1: V:0000  G:ALRT
 
-    // tempC: 4.1 ocupa 4 (ex.: 24.8) + 'C'
-    // luz/vib: 4 dígitos com zeros à esquerda
-    snprintf(line0, sizeof(line0), "T:%4.1fC L:%04d", tempC, luzFiltrada);
+    // tempC com largura fixa e sempre com sinal/dígito: %+05.1f
+    // Ex.: +24.8, +7.2 (evita "virar" pra direita quando tem 1 dígito só)
+    snprintf(line0, sizeof(line0), "T:%+05.1fC L:%04d", tempC, luzFiltrada);
     snprintf(line1, sizeof(line1), "V:%04d  G:%-4s", vibFiltrada, statusAbrev(alertaGeral));
   } else {
     // Diagnóstico compacto (também fixo em 16 via padding)
