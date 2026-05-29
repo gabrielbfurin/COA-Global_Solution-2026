@@ -18,15 +18,16 @@ const int   VIB_ALERTA    = 700;
 
 // Temporização (não-bloqueante)
 const unsigned long SCREEN_INTERVAL_MS  = 3000; // troca de tela
-const unsigned long SAMPLE_INTERVAL_MS  = 200;  // taxa de amostragem (antes era delay(200))
+const unsigned long SAMPLE_INTERVAL_MS  = 200;  // taxa de amostragem
+const unsigned long LCD_REFRESH_MS      = 500;  // atualização do LCD (mais lento = mais estável)
 
 unsigned long lastScreenChange = 0;
 unsigned long lastSampleTime   = 0;
+unsigned long lastLcdRefresh   = 0;
 
 int screenIndex = 0;
 
 // Filtro (média móvel simples)
-// Mantém uma janela pequena pra reduzir oscilação perto do limite.
 const int FILTER_WINDOW = 8;
 int luzBuffer[FILTER_WINDOW];
 int vibBuffer[FILTER_WINDOW];
@@ -34,6 +35,21 @@ int filterIndex = 0;
 long luzSum = 0;
 long vibSum = 0;
 bool filterInitialized = false;
+
+// Leituras atuais (mantidas em memória)
+int rawTemp = 0, rawLuz = 0, rawVib = 0;
+float tempC = 0.0;
+int vibNivel = 0;
+
+// Valores filtrados
+int luzFiltrada = 0;
+int vibFiltrada = 0;
+
+// Status
+bool alertaTemp = false;
+bool alertaLuz  = false;
+bool alertaVib  = false;
+bool alertaGeral = false;
 
 float lerTemperaturaC_TMP36(int leituraAnalogica) {
   float tensao = leituraAnalogica * (5.0 / 1023.0);
@@ -60,29 +76,64 @@ void initFilterWith(int initialLuz, int initialVib) {
   filterInitialized = true;
 }
 
-void updateFilter(int rawLuz, int vibNivel) {
-  // remove o valor antigo do somatório
+void updateFilter(int newLuz, int newVib) {
   luzSum -= luzBuffer[filterIndex];
   vibSum -= vibBuffer[filterIndex];
 
-  // coloca o novo valor
-  luzBuffer[filterIndex] = rawLuz;
-  vibBuffer[filterIndex] = vibNivel;
+  luzBuffer[filterIndex] = newLuz;
+  vibBuffer[filterIndex] = newVib;
 
-  // adiciona ao somatório
-  luzSum += rawLuz;
-  vibSum += vibNivel;
+  luzSum += newLuz;
+  vibSum += newVib;
 
-  // avança o índice circular
   filterIndex = (filterIndex + 1) % FILTER_WINDOW;
 }
 
-int getLuzFiltrada() {
-  return (int)(luzSum / FILTER_WINDOW);
-}
+int getLuzFiltrada() { return (int)(luzSum / FILTER_WINDOW); }
+int getVibFiltrada() { return (int)(vibSum / FILTER_WINDOW); }
 
-int getVibFiltrada() {
-  return (int)(vibSum / FILTER_WINDOW);
+void renderLcd() {
+  // Evita flicker: não usar lcd.clear() no loop; reescrever as duas linhas com padding.
+  if (screenIndex == 0) {
+    // Linha 0: T + L
+    lcd.setCursor(0, 0);
+    lcd.print("T:");
+    lcd.print(tempC, 1);
+    lcd.print("C");
+    lcd.print("   ");
+
+    lcd.setCursor(10, 0);
+    lcd.print("L:");
+    lcd.print(luzFiltrada);
+    lcd.print("   ");
+
+    // Linha 1: V + G
+    lcd.setCursor(0, 1);
+    lcd.print("V:");
+    lcd.print(vibFiltrada);
+    lcd.print("   ");
+
+    lcd.setCursor(10, 1);
+    lcd.print("G:");
+    lcd.print(statusAbrev(alertaGeral));
+    lcd.print("  ");
+  } else {
+    // Linha 0: status T e L
+    lcd.setCursor(0, 0);
+    lcd.print("T:");
+    lcd.print(statusAbrev(alertaTemp));
+    lcd.print("  L:");
+    lcd.print(statusAbrev(alertaLuz));
+    lcd.print("   ");
+
+    // Linha 1: status V e G
+    lcd.setCursor(0, 1);
+    lcd.print("V:");
+    lcd.print(statusAbrev(alertaVib));
+    lcd.print("  G:");
+    lcd.print(statusAbrev(alertaGeral));
+    lcd.print("   ");
+  }
 }
 
 void setup() {
@@ -98,26 +149,25 @@ void setup() {
 
   Serial.begin(9600);
 
-  // Inicializa o filtro com as primeiras leituras
-  int rawLuz0 = analogRead(PIN_LUZ);
-  int rawVib0 = analogRead(PIN_VIB);
-  int vibNivel0 = 1023 - rawVib0;
-  initFilterWith(rawLuz0, vibNivel0);
+  // Inicializa filtro com as primeiras leituras
+  rawLuz = analogRead(PIN_LUZ);
+  rawVib = analogRead(PIN_VIB);
+  vibNivel = 1023 - rawVib;
+  initFilterWith(rawLuz, vibNivel);
 
-  delay(1200); // só splash screen (opcional). O loop principal é não-bloqueante.
+  unsigned long now = millis();
+  lastSampleTime = now;
+  lastScreenChange = now;
+  lastLcdRefresh = now;
+
+  delay(1200); // splash
+  lcd.clear();
 }
 
 void loop() {
   unsigned long now = millis();
 
-  // 1) Amostragem NÃO-bloqueante
-  static int rawTemp = 0;
-  static int rawLuz  = 0;
-  static int rawVib  = 0;
-
-  static float tempC = 0.0;
-  static int vibNivel = 0;
-
+  // 1) Amostragem NÃO-bloqueante (sensores + filtro + status + serial)
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS) {
     lastSampleTime = now;
 
@@ -130,27 +180,37 @@ void loop() {
     // Corrige vibração invertida no circuito
     vibNivel = 1023 - rawVib;
 
-    // Atualiza filtro (média móvel) para luz e vibração
     if (!filterInitialized) {
       initFilterWith(rawLuz, vibNivel);
     } else {
       updateFilter(rawLuz, vibNivel);
     }
 
-    // Debug no Serial apenas na mesma taxa de amostragem
+    luzFiltrada = getLuzFiltrada();
+    vibFiltrada = getVibFiltrada();
+
+    alertaTemp = tempC >= TEMP_ALERTA_C;
+    alertaLuz  = luzFiltrada <= LUZ_ALERTA;
+    alertaVib  = vibFiltrada >= VIB_ALERTA;
+    alertaGeral = alertaTemp || alertaLuz || alertaVib;
+
+    digitalWrite(PIN_LED_ALERTA, alertaGeral ? HIGH : LOW);
+
+    // Serial com telemetria + status
     Serial.print("TempC=");
     Serial.print(tempC, 2);
-    Serial.print(" LuzRaw=");
-    Serial.print(rawLuz);
-    Serial.print(" LuzFil=");
-    Serial.print(getLuzFiltrada());
-    Serial.print(" VibRaw=");
-    Serial.print(rawVib);
-    Serial.print(" VibNivel=");
-    Serial.print(vibNivel);
-    Serial.print(" VibFil=");
-    Serial.print(getVibFiltrada());
-    Serial.println();
+    Serial.print(" Luz=");
+    Serial.print(luzFiltrada);
+    Serial.print(" Vib=");
+    Serial.print(vibFiltrada);
+    Serial.print(" | T=");
+    Serial.print(statusAbrev(alertaTemp));
+    Serial.print(" L=");
+    Serial.print(statusAbrev(alertaLuz));
+    Serial.print(" V=");
+    Serial.print(statusAbrev(alertaVib));
+    Serial.print(" G=");
+    Serial.println(statusAbrev(alertaGeral));
   }
 
   // 2) Troca de telas NÃO-bloqueante
@@ -159,52 +219,9 @@ void loop() {
     lastScreenChange = now;
   }
 
-  // 3) Usa valores filtrados para evitar “pisca-pisca” perto do limite
-  int luzFiltrada = getLuzFiltrada();
-  int vibFiltrada = getVibFiltrada();
-
-  bool alertaTemp = tempC >= TEMP_ALERTA_C;
-  bool alertaLuz  = luzFiltrada <= LUZ_ALERTA;
-  bool alertaVib  = vibFiltrada >= VIB_ALERTA;
-
-  bool alertaGeral = alertaTemp || alertaLuz || alertaVib;
-
-  // LED geral
-  digitalWrite(PIN_LED_ALERTA, alertaGeral ? HIGH : LOW);
-
-  // 4) LCD (atualiza sempre; se quiser, dá pra colocar um intervalo próprio)
-  lcd.clear();
-
-  if (screenIndex == 0) {
-    // Tela 1: valores + status geral
-    lcd.setCursor(0, 0);
-    lcd.print("T:");
-    lcd.print(tempC, 1);
-    lcd.print("C");
-
-    lcd.setCursor(10, 0);
-    lcd.print("L:");
-    lcd.print(luzFiltrada);
-
-    lcd.setCursor(0, 1);
-    lcd.print("V:");
-    lcd.print(vibFiltrada);
-
-    lcd.setCursor(10, 1);
-    lcd.print("G:");
-    lcd.print(statusAbrev(alertaGeral));
-  } else {
-    // Tela 2: diagnóstico compacto
-    lcd.setCursor(0, 0);
-    lcd.print("T:");
-    lcd.print(statusAbrev(alertaTemp));
-    lcd.print("  L:");
-    lcd.print(statusAbrev(alertaLuz));
-
-    lcd.setCursor(0, 1);
-    lcd.print("V:");
-    lcd.print(statusAbrev(alertaVib));
-    lcd.print("  G:");
-    lcd.print(statusAbrev(alertaGeral));
+  // 3) Atualização do LCD controlada (evita flicker)
+  if (now - lastLcdRefresh >= LCD_REFRESH_MS) {
+    lastLcdRefresh = now;
+    renderLcd();
   }
 }
