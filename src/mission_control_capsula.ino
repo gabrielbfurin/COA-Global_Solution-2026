@@ -105,23 +105,20 @@ void renderLcd() {
   char line1[17];
 
   if (screenIndex == 0) {
-    // Linha 0: "T:24.8C   L:54" (fixo em 16)
-    // Linha 1: "V:0      G:OK" (fixo em 16)
-    // Observação: usamos widths fixas pra garantir limpeza completa.
+    // Layout "B" (profissional): valores com largura fixa
+    // Linha 0: T:24.8C L:0054
+    // Linha 1: V:0000  G:ALRT
 
-    // line0: cols 0..15
-    // T: + temp (5 chars aprox) + C + spaces + L: + luz(4)
-    snprintf(line0, sizeof(line0), "T:%4.1fC  L:%-4d", tempC, luzFiltrada);
-    snprintf(line1, sizeof(line1), "V:%-4d     G:%-4s", vibFiltrada, statusAbrev(alertaGeral));
-
+    // tempC: 4.1 ocupa 4 (ex.: 24.8) + 'C'
+    // luz/vib: 4 dígitos com zeros à esquerda
+    snprintf(line0, sizeof(line0), "T:%4.1fC L:%04d", tempC, luzFiltrada);
+    snprintf(line1, sizeof(line1), "V:%04d  G:%-4s", vibFiltrada, statusAbrev(alertaGeral));
   } else {
-    // Linha 0: "T:OK  L:ALRT" + padding
-    // Linha 1: "V:OK  G:OK" + padding
+    // Diagnóstico compacto (também fixo em 16 via padding)
     snprintf(line0, sizeof(line0), "T:%-4s L:%-4s", statusAbrev(alertaTemp), statusAbrev(alertaLuz));
     snprintf(line1, sizeof(line1), "V:%-4s G:%-4s", statusAbrev(alertaVib), statusAbrev(alertaGeral));
   }
 
-  // Garante 16 chars: se snprintf gerar menor, completa; se maior, corta (mas o formato foi pensado p/ caber)
   line0[16] = '\0';
   line1[16] = '\0';
 
@@ -214,7 +211,7 @@ void loop() {
     screenIndex = (screenIndex + 1) % 2;
     lastScreenChange = now;
 
-    // Ao trocar de tela, força redesenho imediato para evitar “sobras”
+    // Ao trocar de tela, força redesenho imediato
     lastLcdRefresh = 0;
   }
 
